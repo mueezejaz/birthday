@@ -15,7 +15,8 @@
             align-items: center;
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
+            overflow: auto;
+            /* Allow scroll on small screens */
         }
 
         .stars {
@@ -43,11 +44,18 @@
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(15px);
             border-radius: 25px;
-            padding: 40px;
+            padding: clamp(20px, 5vw, 40px);
+            /* Responsive padding */
             box-shadow: 0 15px 50px rgba(139, 92, 246, 0.3),
                 0 0 100px rgba(79, 70, 229, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.1);
             position: relative;
+            width: 95vw;
+            /* Responsive width */
+            max-width: 700px;
+            /* Max width */
+            margin: 20px auto;
+            /* Centering */
         }
 
         canvas {
@@ -55,12 +63,22 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6),
                 inset 0 1px 0 rgba(255, 255, 255, 0.1);
             background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+            width: 100%;
+            /* Make canvas scale with container */
+            height: auto;
+            /* Maintain aspect ratio via JS */
+            max-width: 700px;
+            /* Original max width */
+            display: block;
+            margin: 0 auto;
         }
 
         .instructions {
             color: #e0e7ff;
-            margin-top: 25px;
-            font-size: 20px;
+            margin-top: clamp(15px, 4vw, 25px);
+            /* Responsive margin */
+            font-size: clamp(16px, 3vw, 20px);
+            /* Responsive font size */
             text-shadow: 0 0 20px rgba(139, 92, 246, 0.8);
             font-weight: 300;
             letter-spacing: 1px;
@@ -71,18 +89,22 @@
             margin-top: 15px;
             font-weight: 600;
             text-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
-            font-size: 16px;
+            font-size: clamp(14px, 2.5vw, 16px);
+            /* Responsive font size */
         }
 
         .relight-btn {
             background: linear-gradient(45deg, #f97316, #ea580c);
             color: white;
             border: none;
-            padding: 15px 30px;
+            padding: clamp(12px, 3vw, 15px) clamp(25px, 5vw, 30px);
+            /* Responsive padding */
             border-radius: 30px;
-            font-size: 18px;
+            font-size: clamp(16px, 3vw, 18px);
+            /* Responsive font size */
             cursor: pointer;
-            margin-top: 20px;
+            margin-top: clamp(15px, 4vw, 20px);
+            /* Responsive margin */
             transition: all 0.3s ease;
             box-shadow: 0 5px 20px rgba(249, 115, 22, 0.4);
             font-weight: 600;
@@ -93,6 +115,23 @@
             transform: translateY(-3px);
             box-shadow: 0 10px 30px rgba(249, 115, 22, 0.6);
             background: linear-gradient(45deg, #ea580c, #dc2626);
+        }
+
+        @media (max-width: 480px) {
+            .instructions {
+                font-size: clamp(14px, 2.5vw, 16px);
+                /* Further adjust for small screens */
+                letter-spacing: 0.5px;
+            }
+
+            .relight-btn {
+                padding: clamp(10px, 2.5vw, 12px) clamp(20px, 4vw, 25px);
+                font-size: clamp(14px, 2.5vw, 16px);
+            }
+
+            .container {
+                padding: clamp(15px, 4vw, 20px);
+            }
         }
     </style>
 </head>
@@ -114,6 +153,9 @@
         const ctx = canvas.getContext('2d');
         const micStatus = document.getElementById('micStatus');
 
+        const ow = 700; // Original Design Width
+        const oh = 500; // Original Design Height
+
         let candleLit = true;
         let flameAnimation = 0;
         let audioContext;
@@ -127,6 +169,160 @@
         let smoke = [];
         let flameParticles = [];
         let cakeShine = 0;
+        let balloons = []; // Array to hold balloons
+        let confettiParticles = []; // Array to hold confetti
+        let animatedTextChars = []; // Array to hold animated text characters
+
+        class Balloon {
+            constructor(x, y) {
+                const scale = Math.min(canvas.width / ow, canvas.height / oh);
+                const scaleX = canvas.width / ow;
+                const scaleY = canvas.height / oh;
+
+                this.scale = scale;
+                this.scaleX = scaleX;
+                this.scaleY = scaleY;
+
+                this.x = x;
+                this.y = y;
+                this.size = (Math.random() * 20 + 10) * this.scale; // Use this.scale
+                this.color = ['#ff69b4', '#ff4500', '#ffd700', '#00ced1', '#32cd32'][Math.floor(Math.random() * 5)];
+                this.speedY = (Math.random() * 2 + 1) * this.scaleY; // Use this.scaleY
+                this.life = 200; // Increased from 100
+                this.initialLife = this.life; // Store initial life for fading calculation
+                this.stringLength = this.size * (0.8 + Math.random() * 0.4);
+                this.lineWidth = Math.max(1, 2 * this.scale);
+                // Corrected swayFactor: scales the original 0.5 amplitude, then applies a random multiplier
+                this.swayFactor = (Math.random() - 0.5) * 2 * (0.5 * this.scaleX); // Ranges roughly from -0.5*scaleX to +0.5*scaleX
+                this.swaySpeed = Math.random() * 0.05 + 0.02;
+            }
+
+            update() {
+                this.y -= this.speedY;
+                this.life--;
+                // More pronounced sway, scaled
+                this.x += Math.sin(this.y * this.swaySpeed / this.scaleY) * this.swayFactor;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life / this.initialLife); // Fade relative to initial life
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.ellipse(this.x, this.y, this.size, this.size * 1.2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.strokeStyle = '#dddddd'; // Slightly off-white for string
+                ctx.lineWidth = this.lineWidth;
+                ctx.moveTo(this.x, this.y + this.size * 1.2);
+                ctx.lineTo(this.x + (Math.random() - 0.5) * (this.size * 0.2), this.y + this.size * 1.2 + this.stringLength); // Slight string flutter
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        class Confetti {
+            constructor(x, y) {
+                const scale = Math.min(canvas.width / ow, canvas.height / oh);
+                const scaleX = canvas.width / ow;
+                const scaleY = canvas.height / oh;
+                this.x = x;
+                this.y = y;
+                this.size = (Math.random() * 8 + 4) * scale;
+                this.color = ['#ff69b4', '#ff4500', '#ffd700', '#00ced1', '#32cd32', '#f97316', '#6366f1', '#ec4899', '#f5d0fe'][Math.floor(Math.random() * 9)];
+                this.speedX = (Math.random() - 0.5) * (8 * scaleX);
+                this.speedY = (Math.random() * -5 - 5) * scaleY; // Initial upward burst
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+                this.life = 240 + Math.random() * 60; // Increased from 120 + Math.random() * 30
+                this.gravity = 0.15 * scaleY;
+                this.drag = 0.98; // Air resistance
+            }
+
+            update() {
+                this.speedY += this.gravity;
+                this.speedX *= this.drag; // Apply air resistance to horizontal movement
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.rotation += this.rotationSpeed;
+                this.life--;
+            }
+
+            draw() {
+                ctx.save();
+                // Fade out based on remaining life, more rapidly at the end
+                const alpha = Math.max(0, Math.min(1, (this.life / 120) * 2));
+                ctx.globalAlpha = alpha;
+                ctx.translate(this.x + this.size / 2, this.y + this.size / 2);
+                ctx.rotate(this.rotation);
+                ctx.fillStyle = this.color;
+                // Draw as a thin rectangle, make it flutter
+                const flutter = Math.sin(this.life * 0.1) * 0.5 + 0.5; // value between 0 and 1
+                ctx.fillRect(-this.size / 2, -this.size / (2 + flutter), this.size, this.size / (2 + flutter));
+                ctx.restore();
+            }
+        }
+
+        class AnimatedTextCharacter {
+            constructor(char, targetX, targetY, targetSize, color, delay) {
+                this.char = char;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.targetSize = targetSize;
+                this.color = color;
+                this.animationDelay = delay;
+
+                this.opacity = 0;
+                this.currentSize = targetSize * 0.1; // Start small
+                this.phase = 'waiting'; // 'waiting', 'appearing', 'stable'
+                this.life = 150; // Duration for 'stable' phase (now unused for fading)
+            }
+
+            update() {
+                if (this.phase === 'waiting') {
+                    if (this.animationDelay > 0) {
+                        this.animationDelay--;
+                    } else {
+                        this.phase = 'appearing';
+                    }
+                } else if (this.phase === 'appearing') {
+                    this.opacity += 0.05;
+                    this.currentSize += (this.targetSize - this.currentSize) * 0.1;
+
+                    if (this.opacity >= 1 && this.currentSize >= this.targetSize * 0.95) {
+                        this.opacity = 1;
+                        this.currentSize = this.targetSize;
+                        this.phase = 'stable';
+                    }
+                } else if (this.phase === 'stable') {
+                    // Character remains stable, no changes to opacity or size
+                    // Life countdown and transition to 'fading' removed
+                }
+                // Removed 'fading' phase block
+                return true; // Character always considered 'alive' until explicitly cleared
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.font = `bold ${this.currentSize}px Segoe UI, Tahoma, Geneva, Verdana, sans-serif`;
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Add stroke for better visibility
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; // Semi-transparent white stroke
+                ctx.lineWidth = Math.max(1, this.currentSize / 20); // Scaled line width, min 1px
+                ctx.lineJoin = 'round'; // Makes corners look smoother
+                ctx.miterLimit = 2;    // Helps with sharp corners on some fonts/chars
+                ctx.strokeText(this.char, this.targetX, this.targetY);
+
+                ctx.fillText(this.char, this.targetX, this.targetY);
+                ctx.restore();
+            }
+        }
+
 
         // Create stars background
         function createStars() {
@@ -148,14 +344,18 @@
 
         class FlameParticle {
             constructor(x, y) {
-                this.x = x + (Math.random() - 0.5) * 8;
+                const scale = Math.min(canvas.width / ow, canvas.height / oh);
+                const scaleX = canvas.width / ow;
+                const scaleY = canvas.height / oh;
+                this.x = x + (Math.random() - 0.5) * (8 * scaleX);
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 0.5;
-                this.vy = -Math.random() * 2 - 1;
+                this.vx = (Math.random() - 0.5) * (0.5 * scaleX);
+                this.vy = (-Math.random() * 2 - 1) * scaleY;
                 this.life = 1;
                 this.decay = Math.random() * 0.02 + 0.01;
-                this.size = Math.random() * 3 + 1;
+                this.size = (Math.random() * 3 + 1) * scale;
                 this.color = Math.random() > 0.5 ? '#fbbf24' : '#f59e0b';
+                this.shadowBlur = 10 * scale;
             }
 
             update() {
@@ -169,7 +369,7 @@
             draw() {
                 ctx.save();
                 ctx.globalAlpha = this.life;
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = this.shadowBlur;
                 ctx.shadowColor = this.color;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
@@ -181,13 +381,17 @@
 
         class Smoke {
             constructor(x, y) {
-                this.x = x + (Math.random() - 0.5) * 5;
+                const scale = Math.min(canvas.width / ow, canvas.height / oh);
+                const scaleX = canvas.width / ow;
+                const scaleY = canvas.height / oh;
+                this.x = x + (Math.random() - 0.5) * (5 * scaleX);
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 0.3;
-                this.vy = -Math.random() * 0.5 - 0.2;
+                this.vx = (Math.random() - 0.5) * (0.3 * scaleX);
+                this.vy = (-Math.random() * 0.5 - 0.2) * scaleY;
                 this.life = 1;
                 this.decay = Math.random() * 0.005 + 0.002;
-                this.size = Math.random() * 8 + 3;
+                this.size = (Math.random() * 8 + 3) * scale;
+                this.sizeGrowth = 0.1 * scale; // Scale size growth
             }
 
             update() {
@@ -195,7 +399,7 @@
                 this.y += this.vy;
                 this.vx *= 0.99;
                 this.life -= this.decay;
-                this.size += 0.1;
+                this.size += this.sizeGrowth;
             }
 
             draw() {
@@ -211,25 +415,30 @@
 
         class Sparkle {
             constructor(x, y) {
+                const scale = Math.min(canvas.width / ow, canvas.height / oh);
+                const scaleX = canvas.width / ow;
+                const scaleY = canvas.height / oh;
                 this.x = x;
                 this.y = y;
-                this.size = Math.random() * 4 + 2;
-                this.speedX = (Math.random() - 0.5) * 3;
-                this.speedY = (Math.random() - 0.5) * 3;
+                this.size = (Math.random() * 4 + 2) * scale;
+                this.speedX = (Math.random() - 0.5) * (3 * scaleX);
+                this.speedY = (Math.random() - 0.5) * (3 * scaleY);
                 this.rotation = 0;
                 this.rotationSpeed = (Math.random() - 0.5) * 0.2;
-                this.life = 1;
-                this.decay = Math.random() * 0.015 + 0.005;
+                this.life = 1.5; // Increased from 1
+                this.decay = Math.random() * 0.01 + 0.005; // Decreased decay, from 0.015 + 0.005
                 this.color = ['#fbbf24', '#f59e0b', '#eab308'][Math.floor(Math.random() * 3)];
+                this.gravity = 0.1 * scaleY; // Scale gravity
+                this.shadowBlur = 15 * scale;
             }
 
             update() {
                 this.x += this.speedX;
                 this.y += this.speedY;
-                this.speedY += 0.1; // gravity
+                this.speedY += this.gravity;
                 this.rotation += this.rotationSpeed;
                 this.life -= this.decay;
-                this.size *= 0.98;
+                this.size *= 0.98; // Shrink rate
             }
 
             draw() {
@@ -237,18 +446,18 @@
                 ctx.globalAlpha = this.life;
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.rotation);
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = this.shadowBlur;
                 ctx.shadowColor = this.color;
                 ctx.fillStyle = this.color;
 
-                // Draw star shape
                 ctx.beginPath();
                 for (let i = 0; i < 5; i++) {
                     const angle = (i * Math.PI * 2) / 5;
-                    const x = Math.cos(angle) * this.size;
-                    const y = Math.sin(angle) * this.size;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
+                    // Star points are relative to this.size, which is already scaled
+                    const x_ = Math.cos(angle) * this.size;
+                    const y_ = Math.sin(angle) * this.size;
+                    if (i === 0) ctx.moveTo(x_, y_);
+                    else ctx.lineTo(x_, y_);
 
                     const innerAngle = ((i + 0.5) * Math.PI * 2) / 5;
                     const innerX = Math.cos(innerAngle) * this.size * 0.5;
@@ -296,22 +505,121 @@
                 sum += dataArray[i];
             }
             const average = sum / dataArray.length;
-            if (average > 45 && candleLit) {
+            if (average > 20 && candleLit) { // Sensitivity for blowing out
                 candleLit = false;
-                // Create dramatic sparkle explosion
+                const scaleX = canvas.width / ow;
+                const scaleY = canvas.height / oh;
+
+                // Sparkle explosion near candle wick
+                const sparkleOriginX = canvas.width / 2;
+                const sparkleOriginY = canvas.height * (100 / oh); // Top of wick based on original design
                 for (let i = 0; i < 30; i++) {
-                    sparkles.push(new Sparkle(350 + Math.random() * 20, 120 + Math.random() * 20));
+                    sparkles.push(new Sparkle(
+                        sparkleOriginX + (Math.random() - 0.5) * (40 * scaleX), // Increased spread from 20 to 40
+                        sparkleOriginY + (Math.random() - 0.5) * (40 * scaleY)  // Increased spread from 20 to 40
+                    ));
                 }
-                // Add some smoke
+                // Smoke from wick
                 for (let i = 0; i < 10; i++) {
-                    smoke.push(new Smoke(350, 105));
+                    smoke.push(new Smoke(sparkleOriginX, sparkleOriginY));
+                }
+                // Balloons from near candle/center of cake top
+                const balloonOriginX = canvas.width / 2;
+                const balloonOriginY = canvas.height * (120 / oh); // Changed from (160/oh) - higher up
+                for (let i = 0; i < 15; i++) {
+                    balloons.push(new Balloon(
+                        balloonOriginX + (Math.random() - 0.5) * (200 * scaleX), // Increased spread from 100 to 200
+                        balloonOriginY + (Math.random() - 0.5) * (100 * scaleY)  // Increased spread from 60 to 100
+                    ));
+                }
+                // Confetti burst from slightly above cake center
+                const confettiOriginX = canvas.width / 2;
+                const confettiOriginY = canvas.height * (140 / oh); // Positioned slightly above cake
+                for (let i = 0; i < 75; i++) {
+                    confettiParticles.push(new Confetti(
+                        confettiOriginX + (Math.random() - 0.5) * (250 * scaleX), // Increased spread from 150 to 250
+                        confettiOriginY + (Math.random() - 0.5) * (100 * scaleY)  // Increased spread from 50 to 100
+                    ));
+                }
+
+                // Spawn "Happy Birthday!" text - Multi-line implementation
+                const messageLines = [
+                    "Happy birthday, cute Hijabi girl",
+                    "(Hifza Nazar)❤️,",
+                    "with a beautiful heart.",
+                    "May Allah keep you",
+                    "happy and smiling."
+                ];
+                const baseFontSize = Math.max(12 * Math.min(scaleX, scaleY), Math.floor(canvas.width / 25)); // Further increased font size (divisor from 30 to 25)
+                const lineHeight = baseFontSize * 1.4;
+                let startY = canvas.height * 0.22; // Adjusted from 0.20 - Moved down slightly
+
+                // Adjust startY if the text block would be too low / overflow
+                const totalTextBlockHeight = messageLines.length * lineHeight;
+                if (startY + totalTextBlockHeight > canvas.height * 0.9) { // If text goes below 90% of canvas height
+                    startY = canvas.height * 0.9 - totalTextBlockHeight;
+                }
+                if (startY < canvas.height * 0.1) { // Ensure it's not too high either
+                    startY = canvas.height * 0.1;
+                }
+
+
+                const charColors = ['#FF69B4', '#FFD700', '#ADFF2F', '#00CED1', '#FF4500', '#DA70D6', '#9370DB', '#3CB371', '#FFA07A'];
+                let globalCharIndex = 0;
+                let currentLineY = startY;
+
+                for (const currentLineText of messageLines) {
+                    let estimatedLineWidth = 0;
+                    ctx.font = `bold ${baseFontSize}px Segoe UI, Tahoma, Geneva, Verdana, sans-serif`;
+                    for (let charIndex = 0; charIndex < currentLineText.length; charIndex++) {
+                        estimatedLineWidth += ctx.measureText(currentLineText[charIndex]).width;
+                    }
+
+                    let currentX = (canvas.width / 2) - (estimatedLineWidth / 2);
+
+                    for (let j = 0; j < currentLineText.length; j++) {
+                        const char = currentLineText[j];
+
+                        ctx.font = `bold ${baseFontSize}px Segoe UI, Tahoma, Geneva, Verdana, sans-serif`;
+                        const spaceWidth = ctx.measureText(" ").width;
+
+                        if (char === ' ') {
+                            currentX += spaceWidth;
+                            // globalCharIndex++; // Optionally skip delay increment for spaces if desired
+                            continue; // Don't create an animatable object for a space
+                        }
+
+                        const charTargetSize = baseFontSize * (1 + (Math.random() - 0.5) * 0.2); // Smaller size variation
+
+                        ctx.font = `bold ${charTargetSize}px Segoe UI, Tahoma, Geneva, Verdana, sans-serif`;
+                        const charWidth = ctx.measureText(char).width;
+
+                        const targetX = currentX + charWidth / 2;
+                        const charColor = charColors[globalCharIndex % charColors.length];
+                        const delay = globalCharIndex * 2; // Reduced delay per character from 4 to 2
+
+                        animatedTextChars.push(new AnimatedTextCharacter(char, targetX, currentLineY, charTargetSize, charColor, delay));
+
+                        currentX += charWidth;
+                        globalCharIndex++;
+                    }
+                    currentLineY += lineHeight;
                 }
             }
         }
 
         function drawCake() {
+            const ow = 700; // original width
+            const oh = 500; // original height
+            const scaleX = canvas.width / ow;
+            const scaleY = canvas.height / oh;
+            const scale = Math.min(scaleX, scaleY); // General scale for sizes, radii to maintain proportions
+
             // Clear with gradient background
-            const bgGradient = ctx.createRadialGradient(350, 250, 0, 350, 250, 400);
+            const bgGradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.8
+            );
             bgGradient.addColorStop(0, 'rgba(79, 70, 229, 0.3)');
             bgGradient.addColorStop(1, 'rgba(30, 27, 75, 0.8)');
             ctx.fillStyle = bgGradient;
@@ -320,22 +628,30 @@
             // Add cake plate shadow
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
+            ctx.shadowBlur = 20 * scale;
+            ctx.shadowOffsetY = 10 * scale;
 
             // Cake plate
-            const plateGradient = ctx.createRadialGradient(350, 380, 0, 350, 380, 200);
+            const plateGradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height * (380 / oh), 0,
+                canvas.width / 2, canvas.height * (380 / oh), 200 * scale
+            );
             plateGradient.addColorStop(0, '#e5e7eb');
             plateGradient.addColorStop(0.7, '#d1d5db');
             plateGradient.addColorStop(1, '#9ca3af');
             ctx.fillStyle = plateGradient;
             ctx.beginPath();
-            ctx.ellipse(350, 380, 180, 20, 0, 0, Math.PI * 2);
+            ctx.ellipse(
+                canvas.width / 2, canvas.height * (380 / oh),
+                180 * scaleX, 20 * scaleY, 0, 0, Math.PI * 2
+            );
             ctx.fill();
             ctx.restore();
 
-            // Bottom cake layer with realistic shading
-            const layer1Gradient = ctx.createLinearGradient(0, 280, 0, 360);
+            // Bottom cake layer
+            const layer1Y = canvas.height * (280 / oh);
+            const layer1Height = canvas.height * (80 / oh);
+            const layer1Gradient = ctx.createLinearGradient(0, layer1Y, 0, layer1Y + layer1Height);
             layer1Gradient.addColorStop(0, '#8b5cf6');
             layer1Gradient.addColorStop(0.3, '#7c3aed');
             layer1Gradient.addColorStop(0.7, '#6d28d9');
@@ -343,31 +659,39 @@
 
             ctx.fillStyle = layer1Gradient;
             ctx.beginPath();
-            ctx.roundRect(200, 280, 300, 80, 15);
+            ctx.roundRect(
+                canvas.width * (200 / ow), layer1Y,
+                canvas.width * (300 / ow), layer1Height,
+                15 * scale
+            );
             ctx.fill();
-
-            // Add realistic cake texture and highlights
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2 * scale;
             ctx.stroke();
 
             // Frosting decorations on bottom layer
             ctx.fillStyle = '#a855f7';
-            for (let i = 0; i < 8; i++) {
-                const x = 230 + i * 35;
+            const numFrosting1 = 8;
+            const frosting1Spacing = (35 / ow) * canvas.width;
+            const frosting1Radius = 8 * scale;
+            const frosting1HighlightRadius = 3 * scale;
+            for (let i = 0; i < numFrosting1; i++) {
+                const x = canvas.width * (230 / ow) + i * frosting1Spacing;
+                const y = canvas.height * (300 / oh);
                 ctx.beginPath();
-                ctx.arc(x, 300, 8, 0, Math.PI * 2);
+                ctx.arc(x, y, frosting1Radius, 0, Math.PI * 2);
                 ctx.fill();
-                // Add frosting highlight
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.beginPath();
-                ctx.arc(x - 2, 298, 3, 0, Math.PI * 2);
+                ctx.arc(x - 2 * scale, y - 2 * scale, frosting1HighlightRadius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.fillStyle = '#a855f7';
             }
 
             // Middle cake layer
-            const layer2Gradient = ctx.createLinearGradient(0, 220, 0, 280);
+            const layer2Y = canvas.height * (220 / oh);
+            const layer2Height = canvas.height * (60 / oh);
+            const layer2Gradient = ctx.createLinearGradient(0, layer2Y, 0, layer2Y + layer2Height);
             layer2Gradient.addColorStop(0, '#6366f1');
             layer2Gradient.addColorStop(0.3, '#4f46e5');
             layer2Gradient.addColorStop(0.7, '#4338ca');
@@ -375,27 +699,36 @@
 
             ctx.fillStyle = layer2Gradient;
             ctx.beginPath();
-            ctx.roundRect(225, 220, 250, 60, 12);
+            ctx.roundRect(
+                canvas.width * (225 / ow), layer2Y,
+                canvas.width * (250 / ow), layer2Height,
+                12 * scale
+            );
             ctx.fill();
-
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 1.5 * scale;
             ctx.stroke();
 
             // Middle layer decorative swirls
             ctx.strokeStyle = '#60a5fa';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 3 * scale;
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(245, 250);
-            for (let i = 0; i < 6; i++) {
-                const x = 245 + i * 35;
-                ctx.quadraticCurveTo(x + 15, 240, x + 30, 250);
+            const swirlStartY = canvas.height * (250 / oh);
+            const swirlControlY = canvas.height * (240 / oh);
+            const numSwirls = 6;
+            const swirlSpacing = (35 / ow) * canvas.width;
+            ctx.moveTo(canvas.width * (245 / ow), swirlStartY);
+            for (let i = 0; i < numSwirls; i++) {
+                const x = canvas.width * (245 / ow) + i * swirlSpacing;
+                ctx.quadraticCurveTo(x + (15 / ow) * canvas.width, swirlControlY, x + (30 / ow) * canvas.width, swirlStartY);
             }
             ctx.stroke();
 
             // Top cake layer
-            const layer3Gradient = ctx.createLinearGradient(0, 160, 0, 220);
+            const layer3Y = canvas.height * (160 / oh);
+            const layer3Height = canvas.height * (60 / oh);
+            const layer3Gradient = ctx.createLinearGradient(0, layer3Y, 0, layer3Y + layer3Height);
             layer3Gradient.addColorStop(0, '#3b82f6');
             layer3Gradient.addColorStop(0.3, '#2563eb');
             layer3Gradient.addColorStop(0.7, '#1d4ed8');
@@ -403,26 +736,33 @@
 
             ctx.fillStyle = layer3Gradient;
             ctx.beginPath();
-            ctx.roundRect(250, 160, 200, 60, 10);
+            ctx.roundRect(
+                canvas.width * (250 / ow), layer3Y,
+                canvas.width * (200 / ow), layer3Height,
+                10 * scale
+            );
             ctx.fill();
-
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 1 * scale;
             ctx.stroke();
 
             // Top layer elegant decoration
             ctx.fillStyle = '#fbbf24';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 10 * scale;
             ctx.shadowColor = '#fbbf24';
-            for (let i = 0; i < 5; i++) {
-                const x = 270 + i * 32;
+            const numTopDeco = 5;
+            const topDecoSpacing = (32 / ow) * canvas.width;
+            const topDecoRadius = 6 * scale;
+            const topDecoHighlightRadius = 2 * scale;
+            for (let i = 0; i < numTopDeco; i++) {
+                const x = canvas.width * (270 / ow) + i * topDecoSpacing;
+                const y = canvas.height * (190 / oh);
                 ctx.beginPath();
-                ctx.arc(x, 190, 6, 0, Math.PI * 2);
+                ctx.arc(x, y, topDecoRadius, 0, Math.PI * 2);
                 ctx.fill();
-                // Add golden highlight
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
                 ctx.beginPath();
-                ctx.arc(x - 2, 188, 2, 0, Math.PI * 2);
+                ctx.arc(x - 2 * scale, y - 2 * scale, topDecoHighlightRadius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.fillStyle = '#fbbf24';
             }
@@ -431,24 +771,42 @@
             // Add subtle cake shine effect
             cakeShine += 0.01;
             const shineAlpha = (Math.sin(cakeShine) + 1) * 0.03;
-            const shineGradient = ctx.createLinearGradient(200, 160, 500, 160);
+            const shineGradient = ctx.createLinearGradient(
+                canvas.width * (200 / ow), layer3Y,
+                canvas.width * (500 / ow), layer3Y
+            );
             shineGradient.addColorStop(0, `rgba(255, 255, 255, 0)`);
             shineGradient.addColorStop(0.5, `rgba(255, 255, 255, ${shineAlpha})`);
             shineGradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
             ctx.fillStyle = shineGradient;
-            ctx.fillRect(200, 160, 300, 200);
+            ctx.fillRect(
+                canvas.width * (200 / ow), layer3Y,
+                canvas.width * (300 / ow), canvas.height * (200 / oh) // Shine covers top layers
+            );
         }
 
         function drawCandle() {
+            const ow = 700; // original width
+            const oh = 500; // original height
+            const scaleX = canvas.width / ow;
+            const scaleY = canvas.height / oh;
+            const scale = Math.min(scaleX, scaleY);
+
+            const candleX = canvas.width * (340 / ow);
+            const candleY = canvas.height * (110 / oh);
+            const candleWidth = canvas.width * (20 / ow);
+            const candleHeight = canvas.height * (50 / oh);
+            const candleRadius = 3 * scale;
+
             // Candle shadow
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetX = -3;
-            ctx.shadowOffsetY = 5;
+            ctx.shadowBlur = 8 * scale;
+            ctx.shadowOffsetX = -3 * scaleX;
+            ctx.shadowOffsetY = 5 * scaleY;
 
-            // Realistic candle body with wax texture
-            const candleGradient = ctx.createLinearGradient(340, 110, 360, 110);
+            // Realistic candle body
+            const candleGradient = ctx.createLinearGradient(candleX, candleY, candleX + candleWidth, candleY);
             candleGradient.addColorStop(0, '#fef3c7');
             candleGradient.addColorStop(0.2, '#fed7aa');
             candleGradient.addColorStop(0.5, '#fbbf24');
@@ -457,75 +815,102 @@
 
             ctx.fillStyle = candleGradient;
             ctx.beginPath();
-            ctx.roundRect(340, 110, 20, 50, 3);
+            ctx.roundRect(candleX, candleY, candleWidth, candleHeight, candleRadius);
             ctx.fill();
             ctx.restore();
 
             // Candle highlight
             ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-            ctx.fillRect(342, 115, 3, 40);
+            ctx.fillRect(
+                candleX + (2 * scaleX), candleY + (5 * scaleY),
+                3 * scaleX, 40 * scaleY
+            );
 
             // Melted wax drips
             ctx.fillStyle = '#fbbf24';
             ctx.beginPath();
-            ctx.moveTo(340, 135);
-            ctx.quadraticCurveTo(335, 140, 338, 145);
-            ctx.lineTo(340, 143);
+            ctx.moveTo(candleX, candleY + (25 * scaleY));
+            ctx.quadraticCurveTo(
+                candleX - (5 * scaleX), candleY + (30 * scaleY),
+                candleX - (2 * scaleX), candleY + (35 * scaleY)
+            );
+            ctx.lineTo(candleX, candleY + (33 * scaleY));
             ctx.closePath();
             ctx.fill();
 
             ctx.beginPath();
-            ctx.moveTo(360, 130);
-            ctx.quadraticCurveTo(365, 135, 362, 140);
-            ctx.lineTo(360, 138);
+            ctx.moveTo(candleX + candleWidth, candleY + (20 * scaleY));
+            ctx.quadraticCurveTo(
+                candleX + candleWidth + (5 * scaleX), candleY + (25 * scaleY),
+                candleX + candleWidth + (2 * scaleX), candleY + (30 * scaleY)
+            );
+            ctx.lineTo(candleX + candleWidth, candleY + (28 * scaleY));
             ctx.closePath();
             ctx.fill();
 
             // Realistic wick
+            const wickX = canvas.width * (348 / ow);
+            const wickY = canvas.height * (100 / oh);
+            const wickWidth = canvas.width * (4 / ow);
+            const wickHeight = canvas.height * (15 / oh);
             ctx.fillStyle = '#374151';
-            ctx.fillRect(348, 100, 4, 15);
+            ctx.fillRect(wickX, wickY, wickWidth, wickHeight);
 
             // Wick tip (burnt)
             ctx.fillStyle = '#1f2937';
-            ctx.fillRect(348, 100, 4, 3);
+            ctx.fillRect(wickX, wickY, wickWidth, wickHeight * (3 / 15));
 
-            // Draw flame if candle is lit
+            // Draw flame or smoke
+            const flameBaseX = canvas.width / 2; // Center of canvas
+            const flameBaseY = wickY; // Top of the wick
+
             if (candleLit) {
-                drawRealisticFlame();
-                // Add flame particles
+                drawRealisticFlame(flameBaseX, flameBaseY);
                 if (Math.random() < 0.3) {
-                    flameParticles.push(new FlameParticle(350, 95));
+                    flameParticles.push(new FlameParticle(flameBaseX, flameBaseY - (5 * scaleY))); // Adjusted spawn
                 }
             } else {
-                // Add minimal smoke when extinguished
                 if (Math.random() < 0.02) {
-                    smoke.push(new Smoke(350, 105));
+                    smoke.push(new Smoke(flameBaseX, flameBaseY)); // Adjusted spawn
                 }
             }
         }
 
-        function drawRealisticFlame() {
+        function drawRealisticFlame(baseX, baseY) { // Parameters for base position
+            const ow = 700; // original width
+            const oh = 500; // original height
+            const scaleX = canvas.width / ow;
+            const scaleY = canvas.height / oh;
+            const scale = Math.min(scaleX, scaleY);
+
+
             flameAnimation += 0.15;
 
-            const baseX = 350;
-            const baseY = 95;
-            const flameHeight = 30 + Math.sin(flameAnimation) * 4;
-            const flameWidth = 16 + Math.cos(flameAnimation * 1.2) * 3;
-            const sway = Math.sin(flameAnimation * 0.8) * 2;
+            // Original values: flameHeight=30, swayFactor=4, flameWidth=16, swayWidthFactor=3, swayFactor=2
+            // Scaled values
+            const flameHeight = (30 * scale) + Math.sin(flameAnimation) * (4 * scale);
+            const flameWidth = (16 * scale) + Math.cos(flameAnimation * 1.2) * (3 * scale);
+            const sway = Math.sin(flameAnimation * 0.8) * (2 * scaleX); // Sway relative to canvas width
+
+            const flameTopY = baseY - flameHeight;
+            const flameCenterY = baseY - flameHeight / 2; // Approximate center for radial gradients
 
             // Flame glow effect
             ctx.save();
             ctx.shadowColor = '#fbbf24';
-            ctx.shadowBlur = 30;
+            ctx.shadowBlur = 30 * scale;
             ctx.globalAlpha = 0.6;
             ctx.fillStyle = '#fbbf24';
             ctx.beginPath();
-            ctx.ellipse(baseX + sway, baseY - 10, flameWidth * 1.5, flameHeight * 1.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(baseX + sway, baseY - (10 * scaleY), flameWidth * 1.5, flameHeight * 1.2, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
 
             // Outer flame (red-orange)
-            const outerGradient = ctx.createRadialGradient(baseX + sway, baseY, 0, baseX + sway, baseY - 15, flameHeight);
+            const outerGradient = ctx.createRadialGradient(
+                baseX + sway, baseY, 0,
+                baseX + sway, flameCenterY, flameHeight // Adjusted radius for gradient
+            );
             outerGradient.addColorStop(0, '#dc2626');
             outerGradient.addColorStop(0.3, '#ea580c');
             outerGradient.addColorStop(0.6, '#f59e0b');
@@ -536,11 +921,11 @@
             ctx.moveTo(baseX + sway, baseY);
             ctx.bezierCurveTo(
                 baseX + sway - flameWidth / 2, baseY - flameHeight / 3,
-                baseX + sway - flameWidth / 3, baseY - flameHeight * 0.8,
-                baseX + sway, baseY - flameHeight
+                baseX + sway - flameWidth / 3, flameTopY + flameHeight / 5, // Adjusted control points
+                baseX + sway, flameTopY
             );
             ctx.bezierCurveTo(
-                baseX + sway + flameWidth / 3, baseY - flameHeight * 0.8,
+                baseX + sway + flameWidth / 3, flameTopY + flameHeight / 5, // Adjusted control points
                 baseX + sway + flameWidth / 2, baseY - flameHeight / 3,
                 baseX + sway, baseY
             );
@@ -548,45 +933,55 @@
             ctx.fill();
 
             // Middle flame (orange-yellow)
-            const middleGradient = ctx.createRadialGradient(baseX + sway, baseY - 5, 0, baseX + sway, baseY - 10, flameHeight * 0.8);
+            const middleFlameHeight = flameHeight * 0.8;
+            const middleFlameTopY = baseY - middleFlameHeight;
+            const middleGradient = ctx.createRadialGradient(
+                baseX + sway, baseY - (5 * scaleY), 0,
+                baseX + sway, baseY - (10 * scaleY), middleFlameHeight // Adjusted radius
+            );
             middleGradient.addColorStop(0, '#f59e0b');
             middleGradient.addColorStop(0.4, '#fbbf24');
             middleGradient.addColorStop(1, 'rgba(251, 191, 36, 0)');
 
             ctx.fillStyle = middleGradient;
             ctx.beginPath();
-            ctx.moveTo(baseX + sway, baseY - 2);
+            ctx.moveTo(baseX + sway, baseY - (2 * scaleY));
             ctx.bezierCurveTo(
-                baseX + sway - flameWidth / 3, baseY - flameHeight / 4,
-                baseX + sway - flameWidth / 4, baseY - flameHeight * 0.6,
-                baseX + sway, baseY - flameHeight * 0.8
+                baseX + sway - flameWidth / 3, baseY - middleFlameHeight / 3, // Adjusted
+                baseX + sway - flameWidth / 4, middleFlameTopY + middleFlameHeight / 5, // Adjusted
+                baseX + sway, middleFlameTopY
             );
             ctx.bezierCurveTo(
-                baseX + sway + flameWidth / 4, baseY - flameHeight * 0.6,
-                baseX + sway + flameWidth / 3, baseY - flameHeight / 4,
-                baseX + sway, baseY - 2
+                baseX + sway + flameWidth / 4, middleFlameTopY + middleFlameHeight / 5, // Adjusted
+                baseX + sway + flameWidth / 3, baseY - middleFlameHeight / 3, // Adjusted
+                baseX + sway, baseY - (2 * scaleY)
             );
             ctx.closePath();
             ctx.fill();
 
             // Inner flame (bright yellow)
-            const innerGradient = ctx.createRadialGradient(baseX + sway, baseY - 8, 0, baseX + sway, baseY - 5, flameHeight * 0.5);
+            const innerFlameHeight = flameHeight * 0.5;
+            const innerFlameTopY = baseY - innerFlameHeight;
+            const innerGradient = ctx.createRadialGradient(
+                baseX + sway, baseY - (8 * scaleY), 0,
+                baseX + sway, baseY - (5 * scaleY), innerFlameHeight // Adjusted
+            );
             innerGradient.addColorStop(0, '#fef3c7');
             innerGradient.addColorStop(0.5, '#fbbf24');
             innerGradient.addColorStop(1, 'rgba(254, 243, 199, 0)');
 
             ctx.fillStyle = innerGradient;
             ctx.beginPath();
-            ctx.moveTo(baseX + sway, baseY - 5);
+            ctx.moveTo(baseX + sway, baseY - (5 * scaleY));
             ctx.bezierCurveTo(
-                baseX + sway - flameWidth / 5, baseY - flameHeight / 5,
-                baseX + sway - flameWidth / 6, baseY - flameHeight * 0.4,
-                baseX + sway, baseY - flameHeight * 0.5
+                baseX + sway - flameWidth / 5, baseY - innerFlameHeight / 3, // Adjusted
+                baseX + sway - flameWidth / 6, innerFlameTopY + innerFlameHeight / 5, // Adjusted
+                baseX + sway, innerFlameTopY
             );
             ctx.bezierCurveTo(
-                baseX + sway + flameWidth / 6, baseY - flameHeight * 0.4,
-                baseX + sway + flameWidth / 5, baseY - flameHeight / 5,
-                baseX + sway, baseY - 5
+                baseX + sway + flameWidth / 6, innerFlameTopY + innerFlameHeight / 5, // Adjusted
+                baseX + sway + flameWidth / 5, baseY - innerFlameHeight / 3, // Adjusted
+                baseX + sway, baseY - (5 * scaleY)
             );
             ctx.closePath();
             ctx.fill();
@@ -594,7 +989,7 @@
             // Flame core (white-hot center)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.beginPath();
-            ctx.ellipse(baseX + sway, baseY - 8, 2, 8, 0, 0, Math.PI * 2);
+            ctx.ellipse(baseX + sway, baseY - (8 * scaleY), 2 * scale, 8 * scale, 0, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -628,6 +1023,37 @@
                     sparkles.splice(i, 1);
                 }
             }
+
+            // Update balloons
+            for (let i = balloons.length - 1; i >= 0; i--) {
+                balloons[i].update();
+                balloons[i].draw();
+
+                // Remove balloons if life is zero or off-screen
+                if (balloons[i].life <= 0 || balloons[i].y < -balloons[i].size * 2) { // Check if balloon is well off the top screen
+                    balloons.splice(i, 1);
+                }
+            }
+
+            // Update confetti particles
+            for (let i = confettiParticles.length - 1; i >= 0; i--) {
+                confettiParticles[i].update();
+                confettiParticles[i].draw();
+
+                // Remove confetti if life is zero or off-screen (below canvas)
+                if (confettiParticles[i].life <= 0 || confettiParticles[i].y > canvas.height + confettiParticles[i].size) {
+                    confettiParticles.splice(i, 1);
+                }
+            }
+
+            // Update animated text characters
+            for (let i = animatedTextChars.length - 1; i >= 0; i--) {
+                const alive = animatedTextChars[i].update();
+                animatedTextChars[i].draw(ctx);
+                if (!alive) {
+                    animatedTextChars.splice(i, 1);
+                }
+            }
         }
 
         function animate() {
@@ -643,13 +1069,55 @@
             sparkles = [];
             smoke = [];
             flameParticles = [];
+            balloons = []; // Clear balloons on relight
+            confettiParticles = []; // Clear confetti on relight
+            animatedTextChars = []; // Clear animated text on relight
         }
 
         // Initialize
+
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const aspectRatio = 700 / 500; // Original aspect ratio
+
+            let cssWidth = canvas.clientWidth; // Get current CSS display width of canvas
+            let cssHeight = cssWidth / aspectRatio;
+
+            if (cssHeight > window.innerHeight * 0.7) { // Limit height to 70% of viewport height
+                cssHeight = window.innerHeight * 0.7;
+                cssWidth = cssHeight * aspectRatio;
+            }
+
+            // Set the canvas buffer size, scaled by DPR
+            canvas.width = cssWidth * dpr;
+            canvas.height = cssHeight * dpr;
+
+            // Set the CSS size of the canvas (important for layout and for clientWidth/Height to be correct)
+            // This should already be handled by CSS (width: 100%, height: auto), but explicitly setting can be a safeguard.
+            // However, directly setting style.width/height here can sometimes fight with CSS if not careful.
+            // For this implementation, we'll rely on the CSS to correctly size the element, 
+            // and clientWidth/Height to give us that CSS size.
+
+            // Scale the canvas rendering context by DPR
+            // This ensures that drawing operations are scaled up to the larger buffer,
+            // then the browser scales the whole canvas down to the CSS size, resulting in sharper rendering.
+            // ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // REMOVED: Double scaling if drawing logic already uses scaled canvas.width/height
+
+            // Note: All drawing logic is already relative to canvas.width and canvas.height.
+            // Since these are now the DPR-scaled buffer dimensions, the drawing functions will use these larger values.
+            // The browser then scales the canvas element (defined by CSS width/height) to fit the layout,
+            // effectively downsampling the larger buffer and resulting in sharper rendering.
+            // No explicit context scaling is needed here if drawing logic is already DPR-aware via canvas.width/height.
+            // the visual size of drawn elements *should* remain consistent with their intended appearance
+            // relative to the CSS size of the canvas, but rendered with more pixels.
+        }
+
         createStars();
+        resizeCanvas(); // Initial resize
         animate();
 
         // Setup microphone
+        window.addEventListener('resize', resizeCanvas);
         canvas.addEventListener('click', () => {
             if (!micEnabled) {
                 setupMicrophone();
