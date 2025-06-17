@@ -141,10 +141,8 @@
 
     <div class="container">
         <canvas id="cakeCanvas" width="700" height="500"></canvas>
-        <div class="instructions">
-            ✨ Blow gently into your microphone to make a wish ✨
-        </div>
-        <div class="mic-status" id="micStatus">Click to enable microphone magic</div>
+        <div class="mic-status" id="micStatus">Click any where to open mic plss allow it to make this website work or
+            else it will not work </div>
         <button class="relight-btn" onclick="relightCandle()">🔥 Relight the Magic</button>
     </div>
 
@@ -485,7 +483,7 @@
                     dataArray = new Uint8Array(bufferLength);
 
                     micEnabled = true;
-                    micStatus.textContent = "🎤 Microphone ready - make your wish!";
+                    micStatus.textContent = "🎤 Microphone ready - now blow in you mic";
                     micStatus.style.color = "#4ade80";
                 })
                 .catch(err => {
